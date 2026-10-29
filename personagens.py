@@ -121,7 +121,7 @@ class Inimigo(Boneco):
         if not self.estar_vivo():
             return
 
-        perseguindo = self.perseguir_alvo(jogador) if jogador else False
+        perseguindo = self.perseguir_alvo(Jogador) if Jogador else False
 
         if not perseguindo:
             self.tempo_para_mudar -= dt
