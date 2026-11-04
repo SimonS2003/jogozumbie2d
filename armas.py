@@ -1,4 +1,6 @@
-class Arma:
+from abc import ABC, abstractmethod 
+
+class Arma(ABC):
     def __init__(self, nome, dano, capacidade_pente,
         municao_reserva, tempo_recarga, peso, alcance, tipo_disparo, velocidade_tiro, preco=0):
         self.nome = nome
@@ -39,6 +41,7 @@ class Arma:
         print(f"🔄 Recarregando {self.nome}...")
         return True
 
+    @abstractmethod
     def atualizar(self, dt=0):
         if not self.recarregando:
             return
@@ -51,7 +54,7 @@ class Arma:
             self.municao_reserva -= quantidade
             self.recarregando = False
             print(f"✅ {self.nome} recarregada!")
-
+    
 class Submetralhadora(Arma):
     def __init__(self, nome, dano, capacidade_pente, municao_reserva, velocidade_tiro):
         super().__init__(
@@ -121,7 +124,7 @@ class Escopeta(Arma):
 class Pistola(Arma):
     def __init__(self, nome, dano, capacidade_pente, municao_reserva, velocidade_tiro):
         super().__init__(
-            nome=nome,
+            nome=nome, 
             dano=dano,
             capacidade_pente=capacidade_pente,
             municao_reserva=municao_reserva,
@@ -131,7 +134,8 @@ class Pistola(Arma):
             velocidade_tiro=velocidade_tiro,
             peso=1
         )   
-
+        
+"""
 class MP5(Submetralhadora):
     def __init__(self):
         super().__init__(nome="MP5", dano=10, capacidade_pente=30, municao_reserva=90, velocidade_tiro=2)
@@ -174,4 +178,4 @@ class FiveSeven(Pistola):
                          capacidade_pente=15, 
                          municao_reserva=60, 
                          velocidade_tiro=1)    
-
+"""

@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import math
+import random
+
 
 class Boneco(ABC):
     nome = str
@@ -14,18 +16,18 @@ class Boneco(ABC):
         
 
     def receber_dano(self, quantidade : int):
-        if not self.estar_vivo or quantidade <=0:
+        if not self.estar_vivo() or quantidade <=0:
             return
 
         dano_efetivo = max(1, quantidade - self.armadura)
-        self.vida -= max(0,self.vida - dano_efetivo)
+        self.vida = max(0,self.vida - dano_efetivo)
         print(f"{self.__class__.__name__} recebeu {dano_efetivo} de dano! Vida restante: {self.vida}")
 
-        if not self.estar_vivo:
+        if not self.estar_vivo():
             print(f"{self.nome} Morreu")
 
     def atacar(self, alvo):
-        if self.esta_vivo:     
+        if self.estar_vivo():     
             alvo.receber_dano(self.dano)
         else:
             print(f"{self.__class__.__name__} não pode atacar porque está morto.")
@@ -34,7 +36,7 @@ class Boneco(ABC):
         return self.vida > 0
 
     def movimentacao(self, direcao_x:float, direcao_y:float, dt:float):
-        if not self.estar_vivo:
+        if not self.estar_vivo():
             return
         comprimento = (direcao_x ** 2 +direcao_y ** 2) ** 0.5
         if comprimento == 0:
@@ -63,7 +65,7 @@ class Jogador(Boneco):
             print(f"{self.nome} não tem nenhuma arma em mãos!")
             return
 
-        if not alvo.esta_vivo():
+        if not alvo.estar_vivo():
             print(f"{alvo.nome} já está morto!")
             return
 
@@ -79,12 +81,31 @@ class Npc(Boneco):
 
 
 class Inimigo(Boneco):
-    def __init__(self, nome : str, x : float, y : float, vida : int, armadura : int, dano : int, velocidade : float):
+    def __init__(self, nome : str, x : float, y : float, vida : int, armadura : int, dano : int, velocidade : float, raio_visao : float = 200.0):
         super().__init__(nome=nome, x=x, y=y, vida=vida, armadura=armadura, dano=dano, velocidade=velocidade)
+        self.direcao_x = 0
+        self.direcao_y = 0
+        self.tempo_para_mudar = 0
+        self.raio_visao = raio_visao
+        self.sortear_direcao()
 
-    def esta_vivo(self):
-        return self.vida > 0
+    def sortear_direcao(self):
+        angulo = random.uniform( 0, 2 * math.pi)
+        self.direcao_x = math.cos(angulo)
+        self.direcao_y = math.sin(angulo)
+        self.tempo_para_mudar = random.uniform(1.0,3.0)
 
+    def perseguir_alvo(self, alvo):
+        dx = alvo.x - self.x
+        dy = alvo.y - self.y
+        distancia = math.sqrt(dx ** 2 + dy ** 2)
+
+        if distancia <= self.raio_visao and distancia > 0:
+            self.direcao_x = dx / distancia
+            self.direcao_y = dy / distancia
+            return True
+        return False
+    
     def receber_dano(self, quantidade):
         # A armadura absorve um pouco de dano (mínimo de 1)
         dano_real = max(1, quantidade - self.armadura)
@@ -92,11 +113,24 @@ class Inimigo(Boneco):
         
         print(f"{self.nome} tomou {dano_real} de dano! Vida restante: {self.vida}")
 
-        if not self.esta_vivo():
+        if not self.estar_vivo():
             print(f" {self.nome} foi derrotado!")
 
-    def atualizar(self):
-        pass  
+    
+    def atualizar(self,dt):
+        if not self.estar_vivo():
+            return
+
+        perseguindo = self.perseguir_alvo(Jogador) if Jogador else False
+
+        if not perseguindo:
+            self.tempo_para_mudar -= dt
+            if self.tempo_para_mudar <= 0:
+                self.sortear_direcao()
+                
+            self.movimentacao(self.direcao_x, self.direcao_y, dt)   
+
+
     
 
 
