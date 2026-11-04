@@ -1,4 +1,4 @@
-
+import math
 import pygame
 import random
 
@@ -35,6 +35,22 @@ player = pygame.Rect(
 
 player_position = pygame.Vector2(player.center)
 
+def criar_sprite_jogador(tamanho, cor_roupa=(0, 140, 255)):
+    surf = pygame.Surface((tamanho, tamanho), pygame.SRCALPHA)
+    with pygame.PixelArray(surf) as pixels:
+        # Ombros / Corpo
+        pixels[6:18, 4:tamanho-4] = cor_roupa
+        # Braços esticados segurando a arma para a frente (direita)
+        pixels[16:26, 8:12] = (230, 190, 150)
+        pixels[16:26, tamanho-12:tamanho-8] = (230, 190, 150)
+        # Arma apontando para a direita
+        pixels[20:tamanho, tamanho//2 - 2 : tamanho//2 + 2] = (40, 40, 40)
+        # Cabeça vista de cima e boné/capacete
+        pixels[8:20, 8:tamanho-8] = (240, 200, 160)
+        pixels[7:14, 8:tamanho-8] = (20, 60, 130)
+    return surf
+
+player_base_image = criar_sprite_jogador(PLAYER_SIZE)
 
 bullets = pygame.sprite.Group()
 zombies = pygame.sprite.Group()
@@ -107,6 +123,10 @@ while running:
                 if event.key == pygame.K_ESCAPE:
                     game_state = MENU
 
+                # Aperte 'C' durante o jogo para mudar a cor da roupa do jogador 
+                elif event.key == pygame.K_c:
+                    nova_cor = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
+                    player_base_image = criar_sprite_jogador(PLAYER_SIZE, nova_cor)
 #teclas de movimentação do jogadors
     if game_state == PLAYING:
 
@@ -192,12 +212,10 @@ while running:
 
             for bullet in hits:
 
-                zombie.health -= bullet.damage
+                zombie.receber_dano(bullet.damage)
 
-                if zombie.health <= 0:
-
+                if not zombie.estar_vivo():
                     zombie.kill()
-
                     score += 1
 
 #Desenhando elementos na tela
@@ -210,11 +228,13 @@ while running:
         screen.fill((45, 45, 45))
 
         # desenhando o jogador
-        pygame.draw.rect(
-            screen,
-            GREEN,
-            player
-        )
+        mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
+        aim_dir = mouse_pos - player_position
+        angulo_player = math.degrees(math.atan2(-aim_dir.y, aim_dir.x)) if aim_dir.length() > 0 else 0
+
+        player_rotated = pygame.transform.rotate(player_base_image, angulo_player)
+        player_rect_draw = player_rotated.get_rect(center=player.center)
+        screen.blit(player_rotated, player_rect_draw.topleft)
 
         # Desenhando os tiros
         bullets.draw(screen)
