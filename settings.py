@@ -1,0 +1,21 @@
+
+WIDTH = 1280
+HEIGHT = 720
+
+TITLE = "Zombie Survival"
+
+# FPS
+FPS = 60
+
+# Cores RGB
+BLACK = (15, 15, 15)
+WHITE = (240, 240, 240)
+GREEN = (50, 200, 80)
+RED = (200, 50, 50)
+GRAY = (100, 100, 100)
+DARK_GRAY = (35, 35, 35)
+YELLOW = (240, 200, 50)
+
+# Jogador
+PLAYER_SIZE = 40
+PLAYER_SPEED = 250
