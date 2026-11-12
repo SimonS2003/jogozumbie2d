@@ -35,9 +35,9 @@ class Zombie(pygame.sprite.Sprite, Inimigo):
         self.position = pygame.Vector2(self.x, self.y)
 
 
-    def update(self, dt, player_position):
+    def update(self, dt, alvo):
 
-        self.atualizar(dt, player_position)
+        self.atualizar(dt, alvo)
 
         self.position.x = self.x
         self.position.y = self.y
