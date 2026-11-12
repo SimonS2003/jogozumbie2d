@@ -1,360 +1,618 @@
 
 import math
-import pygame
 import random
+import pygame
 
-from settings import *
-from menu import Menu
-from personagens import Jogador, Zombie
-from entities.bullet import Bullet
-
-pygame.init()
-
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption(TITLE)
-
-clock = pygame.time.Clock()
-font = pygame.font.Font(None, 35)
-pause_font = pygame.font.Font(None, 65)
-
-
-MENU = "menu"
-PLAYING = "playing"
-PAUSED = "paused"
-
-game_state = MENU
-running = True
-
-pause_started = 0
-
-
-menu = Menu(screen)
-
-resume_button = pygame.Rect(WIDTH // 2 - 120,HEIGHT // 2 - 10,240,55)
-
-menu_button = pygame.Rect(WIDTH // 2 - 120,HEIGHT // 2 + 65,240,55)
-
-
-
-player = Jogador(
-    nome="Sobrevivente",
-    x=WIDTH // 2,
-    y=HEIGHT // 2,
-    dano=25,
-    velocidade=PLAYER_SPEED,
-    tamanho=PLAYER_SIZE
+from settings import (
+    WIDTH, HEIGHT, TITLE, FPS,
+    PLAYER_SIZE, PLAYER_SPEED, WHITE
 )
 
+from menu import Menu
+from personagens import Jogador, Zombie
+from cenario import Cenario, Camera
 
 
-bullets = pygame.sprite.Group()
-zombies = pygame.sprite.Group()
+class Jogo:
 
+    MENU = "menu"
+    JOGANDO = "jogando"
+    PAUSADO = "pausado"
+    GAME_OVER = "fim"
 
+    def __init__(self):
 
-shoot_cooldown = 250
-last_shot = 0
+        pygame.init()
 
-spawn_interval = 1500
-last_spawn = 0
+        self.tela = pygame.display.set_mode(
+            (WIDTH, HEIGHT)
+        )
 
-damage_cooldown = 600 # Tempo de invencibilidade entre mordidas de zumbi (ms)
+        pygame.display.set_caption(TITLE)
 
-last_player_hit = 0
+        self.relogio = pygame.time.Clock()
 
+        self.fonte = pygame.font.Font(None, 29)
+        self.fonte_grande = pygame.font.Font(None, 65)
 
+        self.menu = Menu(self.tela)
 
-score = 0
+        # Instancia o mapa e a câmera
+        self.cenario = Cenario()
 
+        self.camera = Camera(
+            self.cenario,
+            (WIDTH, HEIGHT)
+        )
 
+        self.jogador = None
 
-def spawn_zombie():
+        self.zumbis = pygame.sprite.Group()
+        self.tiros = pygame.sprite.Group()
 
-    side = random.randint(0, 3)
+        self.estado = self.MENU
+        self.executando = True
 
-    if side == 0:
-        position = (random.randint(0, WIDTH), -40)
+        self.pontos = 0
 
-    elif side == 1:
-        position = (random.randint(0, WIDTH), HEIGHT + 40)
+        self.tempo_spawn = 0.0
+        self.intervalo_spawn = 1.5
 
-    elif side == 2:
-        position = (-40, random.randint(0, HEIGHT))
+        self.clique_disparo = False
+        self.mostrar_hitboxes = False
 
-    else:
-        position = (WIDTH + 40, random.randint(0, HEIGHT))
+        # Botões da pausa
+        self.botao_continuar = pygame.Rect(
+            WIDTH // 2 - 125,
+            HEIGHT // 2 - 5,
+            250, 58
+        )
 
-    zombie = Zombie(position)
+        self.botao_menu = pygame.Rect(
+            WIDTH // 2 - 125,
+            HEIGHT // 2 + 75,
+            250, 58
+        )
 
-    zombies.add(zombie)
-
-
-
-def resume_game():
-
-    global game_state
-    global last_spawn
-    global last_shot
-    global last_player_hit
-
-    pause_duration = pygame.time.get_ticks() - pause_started
-
-    last_spawn += pause_duration
-    last_shot += pause_duration
-    last_player_hit += pause_duration
-
-    game_state = PLAYING
-
-
-
-while running:
-
-    dt = clock.tick(FPS) / 1000.0
-
-    current_time = pygame.time.get_ticks()
-
-
-
-    for event in pygame.event.get():
-
-        if event.type == pygame.QUIT:
-            running = False
-        elif game_state == MENU:
-
-            action = menu.handle_event(event)
-
-            if action == "play":
-
-                game_state = PLAYING
-
-                player.x = float(WIDTH // 2)
-                player.y = float(HEIGHT // 2)
-
-                player.vida = player.vida_maxima
-
-                player.atualizar(0, screen.get_rect())
-
-                bullets.empty()
-                zombies.empty()
-
-                score = 0
-
-                current_time = pygame.time.get_ticks()
-
-                last_spawn = current_time
-                last_shot = current_time
-                last_player_hit = current_time
-
-
-            elif action == "quit":
-
-                running = False
-
-        elif game_state == PLAYING:
-
-            if event.type == pygame.KEYDOWN:
-
-                # PAUSAR COM ESC
-                if event.key == pygame.K_ESCAPE:
-
-                    game_state = PAUSED
-
-                    pause_started = pygame.time.get_ticks()
-
-
-                # Aperte 'C' durante o jogo para mudar a cor da roupa do jogador 
-                elif event.key == pygame.K_c:
-
-                    nova_cor = (random.randint(50, 255), random.randint(50, 255),random.randint(50, 255))
-                    player.trocar_cor(player.cor_base,nova_cor)
+    def iniciar_partida(self):
 
         
-        elif game_state == PAUSED:
+        self.jogador = Jogador(
+            "Sobrevivente",
+            self.cenario.largura / 2,
+            self.cenario.altura / 2,
+            velocidade=PLAYER_SPEED,
+            tamanho=PLAYER_SIZE
+        )
 
-            if event.type == pygame.KEYDOWN:
+        self.zumbis.empty()
+        self.tiros.empty()
 
-                # ESC PARA CONTINUAR
-                if event.key == pygame.K_ESCAPE:
+        self.pontos = 0
+        self.tempo_spawn = 0.0
 
-                    resume_game()
+        self.camera.seguir(
+            self.jogador.posicao,
+            0,
+            imediato=True
+        )
 
+        self.estado = self.JOGANDO
 
-            # CLIQUES NOS BOTÕES
-            if event.type == pygame.MOUSEBUTTONDOWN:
+    def criar_zumbi(self):
 
-                if event.button == 1:
+        
+        if len(self.zumbis) >= 40:
+            return
 
-                    mouse_pos = event.pos
+        
+        for _ in range(50):
 
-                    # CONTINUAR
-                    if resume_button.collidepoint(mouse_pos):
+            angulo = random.uniform(
+                0,
+                math.tau
+            )
 
-                        resume_game()
+            raio = random.randint(
+                700, 900
+            )
 
+            ponto = (
+                self.jogador.posicao
+                + pygame.Vector2(
+                    math.cos(angulo),
+                    math.sin(angulo)
+                ) * raio
+            )
 
-                    # VOLTAR AO MENU
-                    elif menu_button.collidepoint(mouse_pos):
+            hitbox = pygame.Rect(
+                0, 0, 24, 24
+            )
 
-                        game_state = MENU
+            hitbox.center = (
+                round(ponto.x),
+                round(ponto.y)
+            )
 
+            if not self.cenario.colide_solido(
+                hitbox
+            ):
 
+                self.zumbis.add(
+                    Zombie(ponto)
+                )
 
-    if game_state == PLAYING:
+                return
 
+    def processar_eventos(self):
 
-        keys = pygame.key.get_pressed()
+        self.clique_disparo = False
 
-        dir_x = float(keys[pygame.K_d] - keys[pygame.K_a])
+        for evento in pygame.event.get():
 
-        dir_y = float(keys[pygame.K_s] - keys[pygame.K_w])
+            if evento.type == pygame.QUIT:
+                self.executando = False
+                continue
 
-        player.movimentacao(dir_x, dir_y, dt)
+            if self.estado == self.MENU:
 
-        player.atualizar(dt, screen.get_rect())
+                acao = self.menu.handle_event(
+                    evento
+                )
 
-        player_position = pygame.Vector2(player.x,player.y)
+                if acao == "play":
+                    self.iniciar_partida()
 
+                elif acao == "quit":
+                    self.executando = False
 
-        mouse_buttons = pygame.mouse.get_pressed()
+            elif self.estado == self.JOGANDO:
 
-        if (mouse_buttons[0] and current_time - last_shot >= shoot_cooldown):
+                if (
+                    evento.type
+                    == pygame.MOUSEBUTTONDOWN
+                    and evento.button == 1
+                ):
+                    self.clique_disparo = True
 
-            mouse_position = pygame.Vector2(pygame.mouse.get_pos())
+                if evento.type == pygame.KEYDOWN:
 
-            shoot_direction = mouse_position - player_position
+                    if evento.key == pygame.K_ESCAPE:
+                        self.estado = self.PAUSADO
 
-            if shoot_direction.length() > 0:
+                    elif evento.key == pygame.K_r:
 
-                shoot_direction = shoot_direction.normalize()
+                        self.jogador.arma_equipada.iniciar_recarga()
 
-                bullet = Bullet(player.rect.center,shoot_direction)
+                    elif evento.key == pygame.K_c:
 
-                bullets.add(bullet)
+                        cor = tuple(
+                            random.randint(50, 255)
+                            for _ in range(3)
+                        )
 
-                last_shot = current_time
+                        self.jogador.trocar_cor(cor)
 
+                    
+                    elif evento.key == pygame.K_h:
 
-        bullets.update(dt)
+                        self.mostrar_hitboxes = (
+                            not self.mostrar_hitboxes
+                        )
+                    
 
-        # 3. Spawn e Atualização dos Zumbis (passando o objeto 'player' como alvo!)
+                    
+                    elif (
+                        pygame.K_1
+                        <= evento.key
+                        <= pygame.K_6
+                    ):
 
-        if current_time - last_spawn >= spawn_interval:
+                        numero = (
+                            evento.key - pygame.K_0
+                        )
 
-            spawn_zombie()
+                        self.jogador.selecionar_arma(
+                            numero
+                        )
 
-            last_spawn = current_time
+            elif self.estado == self.PAUSADO:
 
+                if (
+                    evento.type == pygame.KEYDOWN
+                    and evento.key == pygame.K_ESCAPE
+                ):
+                    self.estado = self.JOGANDO
 
+                elif (
+                    evento.type
+                    == pygame.MOUSEBUTTONDOWN
+                    and evento.button == 1
+                ):
 
-        zombies.update(dt, player)
+                    if self.botao_continuar.collidepoint(
+                        evento.pos
+                    ):
+                        self.estado = self.JOGANDO
 
-         # 4. Colisão entre Tiros e Zumbis (usa receber_dano e estar_vivo de Boneco)
+                    elif self.botao_menu.collidepoint(
+                        evento.pos
+                    ):
+                        self.estado = self.MENU
 
-        for zombie in zombies:
+            elif self.estado == self.GAME_OVER:
 
-            hits = pygame.sprite.spritecollide(zombie,bullets,True)
+                if evento.type == pygame.KEYDOWN:
 
-            for bullet in hits:
+                    if evento.key == pygame.K_r:
+                        self.iniciar_partida()
 
-                zombie.receber_dano(bullet.damage)
+                    elif evento.key == pygame.K_ESCAPE:
+                        self.estado = self.MENU
 
-                if not zombie.estar_vivo():
+    def atualizar(self, dt):
 
-                    zombie.kill()
+        if self.estado != self.JOGANDO:
+            return
 
-                    score += 1
+        
+        teclas = pygame.key.get_pressed()
 
-        # 5. Colisão entre Zumbis e Jogador (Zumbi ataca o Jogador!)
-        if current_time - last_player_hit >= damage_cooldown:
+        direcao = pygame.Vector2(
+            int(teclas[pygame.K_d])
+            - int(teclas[pygame.K_a]),
 
-            for zombie in zombies:
+            int(teclas[pygame.K_s])
+            - int(teclas[pygame.K_w])
+        )
 
-                if player.rect.colliderect(zombie.rect):
+        self.jogador.mover_jogador(
+            direcao,
+            dt,
+            self.cenario
+        )
 
-                    zombie.atacar(player)
+       
+        self.camera.seguir(
+            self.jogador.posicao,
+            dt
+        )
 
-                    last_player_hit = current_time
+        
+        destino = self.camera.tela_para_mundo(
+            pygame.mouse.get_pos()
+        )
 
-                    if not player.estar_vivo():
+        self.jogador.mirar(destino)
+        self.jogador.atualizar(dt)
 
-                        game_state = MENU
+        
+        arma = self.jogador.arma_equipada
 
+        disparar = (
+            self.clique_disparo
+            or (
+                arma.automatico
+                and pygame.mouse.get_pressed()[0]
+            )
+        )
+
+        if disparar:
+
+            novos_tiros = self.jogador.disparar(
+                destino
+            )
+
+            for tiro in novos_tiros:
+                self.tiros.add(tiro)
+
+        
+        self.tiros.update(
+            dt,
+            self.cenario
+        )
+
+        # 6. SPAWN DOS ZUMBIS
+        self.tempo_spawn += dt
+
+        if self.tempo_spawn >= self.intervalo_spawn:
+
+            self.tempo_spawn -= (
+                self.intervalo_spawn
+            )
+
+            self.criar_zumbi()
+
+        
+        self.zumbis.update(
+            dt,
+            self.jogador,
+            self.cenario
+        )
+
+       
+        for zumbi in list(self.zumbis):
+
+           
+            acertos = pygame.sprite.spritecollide(
+                zumbi,
+                self.tiros,
+                dokill=True,
+
+                collided=lambda z, tiro:
+                    z.hitbox.colliderect(tiro.rect)
+            )
+
+            for tiro in acertos:
+
+                if zumbi.estar_vivo():
+                    zumbi.receber_dano(tiro.dano)
+
+                if not zumbi.estar_vivo():
+
+                    zumbi.kill()
+                    self.pontos += 1
                     break
 
+            
+            if (
+                zumbi.alive()
+                and zumbi.hitbox.colliderect(
+                    self.jogador.hitbox
+                )
+            ):
 
-                # Desenhando elementos na tela
-    if game_state == MENU:
+                zumbi.atacar(
+                    self.jogador
+                )
 
-        menu.draw()
+        
+        if not self.jogador.estar_vivo():
+            self.estado = self.GAME_OVER
+
+    def texto(
+        self, mensagem, x, y,
+        cor=WHITE
+    ):
+
+        imagem = self.fonte.render(
+            mensagem, True, cor
+        )
+
+        self.tela.blit(
+            imagem,
+            (x, y)
+        )
+
+    def desenhar(self):
+
+        if self.estado == self.MENU:
+            self.menu.draw()
+            return
+
+        
+        self.cenario.desenhar(
+            self.tela,
+            self.camera
+        )
+
+        
+        for tiro in self.tiros:
+
+            self.tela.blit(
+                tiro.image,
+                self.camera.aplicar(
+                    tiro.rect
+                )
+            )
+
+        
+        for zumbi in self.zumbis:
+
+            self.tela.blit(
+                zumbi.image,
+                self.camera.aplicar(
+                    zumbi.rect
+                )
+            )
+
+            """
+            if self.mostrar_hitboxes:
+
+                pygame.draw.rect(
+                    self.tela,
+                    (255, 80, 80),
+                    self.camera.aplicar(
+                        zumbi.hitbox
+                    ),
+                    2
+                )
+                """
+
+        
+        self.tela.blit(
+            self.jogador.image,
+            self.camera.aplicar(
+                self.jogador.rect
+            )
+        )
+
+        """if self.mostrar_hitboxes:
+
+            pygame.draw.rect(
+                self.tela,
+                (255, 240, 70),
+                self.camera.aplicar(
+                    self.jogador.hitbox
+                ),
+                2
+            )"""
+
+       
+        pygame.draw.rect(
+            self.tela,
+            (95, 25, 25),
+            (18, 18, 220, 18)
+        )
+
+        largura_vida = round(
+            220 * self.jogador.vida
+            / self.jogador.vida_maxima
+        )
+
+        pygame.draw.rect(
+            self.tela,
+            (50, 195, 75),
+            (18, 18, largura_vida, 18)
+        )
+
+        
+        arma = self.jogador.arma_equipada
+
+        if arma.recarregando:
+            texto_municao = (
+                f"Recarregando {arma.tempo_restante:.1f}s"
+            )
+
+        else:
+            texto_municao = (
+                f"{arma.municao_no_pente}/"
+                f"{arma.municao_reserva}"
+            )
+
+        self.texto(
+            f"HP {self.jogador.vida}/"
+            f"{self.jogador.vida_maxima} | "
+            f"{arma.nome}: {texto_municao} | "
+            f"Dano {arma.dano} | "
+            f"Eliminados: {self.pontos}",
+            18, 43
+        )
+
+        self.texto(
+            "1-6: armas | R: recarregar | "
+            "C: cor| ESC: pausa",
+            18, HEIGHT - 34
+        )
+
+        
+        if self.estado in (
+            self.PAUSADO,
+            self.GAME_OVER
+        ):
+
+            mascara = pygame.Surface(
+                (WIDTH, HEIGHT),
+                pygame.SRCALPHA
+            )
+
+            mascara.fill(
+                (0, 0, 0, 190)
+            )
+
+            self.tela.blit(
+                mascara,
+                (0, 0)
+            )
+
+            titulo = (
+                "JOGO PAUSADO"
+                if self.estado == self.PAUSADO
+                else "GAME OVER"
+            )
+
+            imagem = self.fonte_grande.render(
+                titulo,
+                True,
+                WHITE
+            )
+
+            self.tela.blit(
+                imagem,
+                imagem.get_rect(
+                    center=(
+                        WIDTH // 2,
+                        HEIGHT // 2 - 105
+                    )
+                )
+            )
+
+            if self.estado == self.PAUSADO:
+
+                botoes = [
+                    (
+                        self.botao_continuar,
+                        "CONTINUAR",
+                        (45, 145, 72)
+                    ),
+                    (
+                        self.botao_menu,
+                        "VOLTAR AO MENU",
+                        (145, 55, 55)
+                    )
+                ]
+
+                for rect, label, cor in botoes:
+
+                    pygame.draw.rect(
+                        self.tela,
+                        cor,
+                        rect,
+                        border_radius=8
+                    )
+
+                    txt = self.fonte.render(
+                        label,
+                        True,
+                        WHITE
+                    )
+
+                    self.tela.blit(
+                        txt,
+                        txt.get_rect(
+                            center=rect.center
+                        )
+                    )
+
+            else:
+
+                texto = self.fonte.render(
+                    "R: reiniciar | ESC: menu",
+                    True,
+                    WHITE
+                )
+
+                self.tela.blit(
+                    texto,
+                    texto.get_rect(
+                        center=(
+                            WIDTH // 2,
+                            HEIGHT // 2 + 30
+                        )
+                    )
+                )
+
+    def executar(self):
+
+        while self.executando:
+
+            dt = min(
+                self.relogio.tick(FPS) / 1000,
+                0.05
+            )
+
+            self.processar_eventos()
+            self.atualizar(dt)
+            self.desenhar()
+
+            pygame.display.flip()
+
+        pygame.quit()
 
 
-
-    elif game_state == PLAYING or game_state == PAUSED:
-
-        screen.fill((45, 45, 45))
+def main():
+    Jogo().executar()
 
 
-         # Calcula direção do mouse para girar o sprite do Jogador (Bird View)
-
-        mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
-
-        aim_dir = mouse_pos - pygame.Vector2(player.x, player.y)
-
-        player.desenhar(screen,aim_dir.x,aim_dir.y)
-
-
-
-        bullets.draw(screen)
-
-        zombies.draw(screen)
-
-        # HUD: Placar e Vida do Jogador
-        score_text = font.render(
-            f"Zumbis eliminados: {score} | Vida: {player.vida}/{player.vida_maxima}",True,WHITE)
-
-        screen.blit(score_text, (20, 20))
-
-
-        controls = font.render(
-            "WASD: Mover | Mouse: Atirar | C: Cor | ESC: Pausar",True,WHITE)
-
-        screen.blit(controls,(20, HEIGHT - 40))
-
-        #Quando o jogo estiver pausado, desenha a tela de pausa com opções de continuar ou voltar ao menu
-        if game_state == PAUSED:
-
-            overlay = pygame.Surface((WIDTH, HEIGHT),pygame.SRCALPHA)
-
-            overlay.fill((0, 0, 0, 190))
-
-            screen.blit(overlay, (0, 0))
-
-            pause_title = pause_font.render("JOGO PAUSADO",True,WHITE)
-
-            title_rect = pause_title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 100))
-
-            screen.blit(pause_title,title_rect)
-
-            pygame.draw.rect(screen,(40, 150, 70),resume_button,border_radius=10)
-
-            resume_text = font.render("CONTINUAR",True,WHITE)
-
-            resume_rect = resume_text.get_rect(center=resume_button.center)
-
-            screen.blit(resume_text,resume_rect)
-
-            pygame.draw.rect(screen,(150, 50, 50),menu_button,border_radius=10)
-
-            menu_text = font.render("VOLTAR AO MENU",True,WHITE)
-
-            menu_rect = menu_text.get_rect(center=menu_button.center)
-
-            screen.blit(menu_text,menu_rect)
-
-
-
-    pygame.display.flip()
-
-
-
-pygame.quit()
+if __name__ == "__main__":
+    main()

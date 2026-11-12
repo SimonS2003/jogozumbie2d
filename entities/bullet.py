@@ -1,38 +1,60 @@
-
 import pygame
 
 
 class Bullet(pygame.sprite.Sprite):
 
-    def __init__(self, position, direction):
-
+    def __init__(
+        self, position, direction,
+        dano, velocidade, alcance
+    ):
         super().__init__()
 
-        self.image = pygame.Surface((10, 10), pygame.SRCALPHA)
+        self.image = pygame.Surface(
+            (8, 8), pygame.SRCALPHA
+        )
 
         pygame.draw.circle(
             self.image,
-            (255, 220, 50),
-            (5, 5),
-            5
+            (255, 215, 65),
+            (4, 4),
+            4
         )
 
-        self.rect = self.image.get_rect(center=position)
+        self.posicao = pygame.Vector2(position)
 
-        self.position = pygame.Vector2(position)
-        self.direction = pygame.Vector2(direction)
+        self.direcao = pygame.Vector2(
+            direction
+        ).normalize()
 
-        self.speed = 600
-        self.damage = 50
+        self.velocidade = velocidade
+        self.dano = dano
+        self.alcance = alcance
 
-    def update(self, dt):
+        self.distancia = 0.0
 
-        self.position += self.direction * self.speed * dt
+        self.rect = self.image.get_rect(
+            center=self.posicao
+        )
+
+    def update(self, dt, cenario):
+
+        deslocamento = (
+            self.direcao
+            * self.velocidade
+            * dt
+        )
+
+        self.posicao += deslocamento
+        self.distancia += deslocamento.length()
 
         self.rect.center = (
-            round(self.position.x),
-            round(self.position.y)
+            round(self.posicao.x),
+            round(self.posicao.y)
         )
 
-        if not pygame.display.get_surface().get_rect().colliderect(self.rect):
+        
+        if (
+            self.distancia >= self.alcance
+            or cenario.colide_solido(self.rect)
+        ):
             self.kill()
