@@ -11,6 +11,7 @@ class Boneco(pygame.sprite.Sprite, ABC):
         self.x = x
         self.y = y
         self.vida = vida
+        self.vida_maxima = vida
         self.armadura = armadura
         self.dano = dano
         self.velocidade = velocidade
