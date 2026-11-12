@@ -534,7 +534,7 @@ class Zombie(Inimigo):
             armadura=0,
             dano=10,
             velocidade=random.randint(60, 100),
-            raio_visao=950,
+            raio_visao=250,
             cor_base=random.choice([
                 (90, 150, 80),
                 (70, 120, 90),
