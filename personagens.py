@@ -3,9 +3,10 @@ import math
 import random
 import pygame
 
-class Boneco(ABC):
-    nome = str
-    def __init__(self, nome : str, x : float, y : float, vida : int = 100, armadura : int = 0, dano : int = 5, velocidade : float = 2.0, cor_base=(0, 128, 255)):
+class Boneco(pygame.sprite.Sprite, ABC):
+    def __init__(self, nome : str, x : float, y : float, vida : int = 100, armadura : int = 0, dano : int = 5, velocidade : float = 2.0, cor_base=(0, 140, 255), tamanho: int = 36):
+        
+        super().__init__()
         self.nome = nome
         self.x = x
         self.y = y
@@ -14,8 +15,9 @@ class Boneco(ABC):
         self.dano = dano
         self.velocidade = velocidade
         
-        self.largura = 32
-        self.altura = 32
+        self.tamanho = tamanho
+        self.largura = tamanho
+        self.altura = tamanho
         self.cor_base = cor_base
         self.imagem_original = pygame.Surface((self.largura, self.altura), pygame.SRCALPHA)
 
@@ -24,21 +26,24 @@ class Boneco(ABC):
         self.imagem_atual = self.imagem_original.copy()
         self.tempo_efeito_dano = 0.0
 
+        self.image = self.imagem_atual
+        self.rect = self.image.get_rect(center=(round(self.x), round(self.y)))
+
     def gerar_sprite_pixelarray(self):
         self.imagem_original.fill((0, 0, 0, 0))
+        t = self.largura
         with pygame.PixelArray(self.imagem_original) as pixels:
             #Corpo
-            pixels[4:28, 4:28] = self.cor_base
-
-            #Bordas
-            pixels[4:28, 4] = (0, 0, 0)  
-            pixels[4:28, 27] = (0, 0, 0)
-            pixels[4, 4:28] = (0, 0, 0)
-            pixels[27, 4:28] = (0, 0, 0)
-
-            #Olhos
-            pixels[10:14, 10:14] = (255, 255, 255)
-            pixels[18:22, 10:14] = (255, 255, 255)
+            # Ombros / Corpo
+            pixels[6:18, 4:t-4] = self.cor_base
+            # Braços esticados para a frente (direita)
+            pixels[16:28, 7:12] = (230, 190, 150)
+            pixels[16:28, t-12:t-7] = (230, 190, 150)
+            # Cabeça centralizada
+            pixels[8:22, 9:t-9] = (240, 200, 160)
+            # Olhos virados para a direita
+            pixels[18:21, 11:14] = (20, 20, 20)
+            pixels[18:21, t-14:t-11] = (20, 20, 20)
 
     def trocar_cor(self, cor_base, nova_cor):
         with pygame.PixelArray(self.imagem_original) as pixels:
@@ -71,9 +76,14 @@ class Boneco(ABC):
             if self.tempo_efeito_dano <= 0:
                 self.imagem_atual = self.imagem_original.copy()
 
-    def desenhar(self, tela):
-        if self.estar_vivo():
-            tela.blit(self.imagem_atual, (int(self.x), int(self.y)))
+    def desenhar(self, tela, direcao_x: float = 1.0, direcao_y: float = 0.0):
+        if not self.estar_vivo():
+            return
+        angulo = math.degrees(math.atan2(-direcao_y, direcao_x))
+        img_rotacionada = pygame.transform.rotate(self.imagem_atual, angulo)
+        rect = img_rotacionada.get_rect(center=(round(self.x), round(self.y)))
+        tela.blit(img_rotacionada, rect.topleft)
+
 
     def atacar(self, alvo):
         if self.estar_vivo():     
@@ -100,10 +110,17 @@ class Boneco(ABC):
 
 class Jogador(Boneco):
 
-    def __init__(self, nome : str, x : float, y : float, dano : int = 10,):
-        super().__init__(nome=nome, x=x, y=y, dano=dano, velocidade=220.0, cor_base=(0, 128, 255))
+    def __init__(self, nome: str, x: float, y: float, dano: int = 25, velocidade: float = 250.0, tamanho: int = 36):
+        super().__init__(nome=nome, x=x, y=y, vida=100, armadura=2, dano=dano, velocidade=velocidade, cor_base=(0, 140, 255), tamanho=tamanho)
         self.dinheiro = 5
         self.arma_equipada = None
+
+    def gerar_sprite_pixelarray(self):
+        super().gerar_sprite_pixelarray()
+        t = self.largura
+        with pygame.PixelArray(self.imagem_original) as pixels:
+            pixels[22:t, t // 2 - 2 : t // 2 + 2] = (50, 50, 50)
+            pixels[7:15, 9:t-9] = (20, 60, 130)
 
     def equipar_arma(self, arma):
         self.arma_equipada = arma
@@ -120,10 +137,15 @@ class Jogador(Boneco):
 
         alvo.receber_dano(self.arma_equipada.dano)
 
-    def atualizar(self, dt=0):
+    def atualizar(self, dt=0, limites_tela=None):
         self.atualizar_efeito_dano(dt)
         if self.arma_equipada:
             self.arma_equipada.atualizar(dt)
+
+        self.rect.center = (round(self.x), round(self.y))
+        if limites_tela:
+            self.rect.clamp_ip(limites_tela)
+            self.x, self.y = float(self.rect.centerx), float(self.rect.centery)
 
 class Npc(Boneco):
     def __init__(self, nome: str, x: float, y: float, vida: int = 100, armadura: int = 0, dano: int = 0, velocidade: float = 100.0):
@@ -142,6 +164,22 @@ class Inimigo(Boneco):
         self.raio_visao = raio_visao
         self.sortear_direcao()
 
+    def gerar_sprite_pixelarray(self):
+        self.imagem_original.fill((0, 0, 0, 0))
+        t = self.largura
+        with pygame.PixelArray(self.imagem_original) as pixels:
+            pixels[8:20, 6:t-6] = (70, 50, 40)
+            # Braços de zumbi esticados para a frente
+            pixels[18:32, 7:12] = self.cor_base
+            pixels[18:32, t-12:t-7] = self.cor_base
+            # Manchas vermelhas nas mãos
+            pixels[29:32, 7:12] = (180, 30, 30)
+            pixels[29:32, t-12:t-7] = (180, 30, 30)
+            # Cabeça do zumbi e olhos brancos
+            pixels[10:24, 10:t-10] = self.cor_base
+            pixels[20:23, 12:15] = (255, 255, 255)
+            pixels[20:23, t-15:t-12] = (255, 255, 255)
+   
     def sortear_direcao(self):
         angulo = random.uniform( 0, 2 * math.pi)
         self.direcao_x = math.cos(angulo)
@@ -178,4 +216,32 @@ class Inimigo(Boneco):
             if self.tempo_para_mudar <= 0:
                 self.sortear_direcao()
                 
-        self.movimentacao(self.direcao_x, self.direcao_y, dt)   
+        self.movimentacao(self.direcao_x, self.direcao_y, dt) 
+
+        angulo = math.degrees(math.atan2(-self.direcao_y, self.direcao_x))
+        self.image = pygame.transform.rotate(self.imagem_atual, angulo)
+        self.rect = self.image.get_rect(center=(round(self.x), round(self.y)))
+
+    # O pygame.sprite.Group chama .update(), então redirecionamos para .atualizar()
+    def update(self, dt, alvo=None):
+        self.atualizar(dt, alvo)
+
+class Zombie(Inimigo):
+    def __init__(self, position):
+        cor_zumbi = random.choice([
+            (90, 150, 80), 
+            (70, 120, 90), 
+            (120, 90, 140)
+            ])
+        
+        super().__init__(
+            nome="Zumbi",
+            x=position[0],
+            y=position[1],  
+            vida=100,
+            armadura=0,
+            dano=10,
+            velocidade=random.randint(60, 100),
+            raio_visao=1350.0,
+            cor_base=cor_zumbi
+        )
